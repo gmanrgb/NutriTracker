@@ -4,6 +4,7 @@ import { verifyPassword, generateSessionToken, hashToken } from '@/lib/crypto';
 import { LoginSchema } from '@/lib/schemas';
 import { sessionCookieOptions } from '@/lib/auth';
 import { checkLoginRateLimit } from '@/lib/rate-limit';
+import { handshakeWeightTracking } from '@/lib/weight-handshake';
 
 export const runtime = 'nodejs';
 
@@ -61,8 +62,13 @@ export async function POST(req: NextRequest) {
     args: [sessionId, user.id as string, tokenHash, expiresAt],
   });
 
+  const weightHandshake = await handshakeWeightTracking(user.id as string);
   const opts = sessionCookieOptions();
-  const response = NextResponse.json({ id: user.id, username: user.username });
+  const response = NextResponse.json({
+    id: user.id,
+    username: user.username,
+    weightHandshake,
+  });
   response.cookies.set(opts.name, rawToken, {
     httpOnly: opts.httpOnly,
     secure: opts.secure,

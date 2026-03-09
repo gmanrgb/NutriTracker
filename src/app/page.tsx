@@ -7,6 +7,19 @@ import { useAuthStore } from '@/stores/auth';
 
 type Mode = 'landing' | 'register' | 'login';
 
+interface LoginResponse {
+  id: string;
+  username: string;
+  weightHandshake?: {
+    source: 'supabase';
+    status: 'connected' | 'not_configured' | 'not_found' | 'error';
+    latestWeight: number | null;
+    unit: string | null;
+    loggedAt: string | null;
+    message?: string;
+  };
+}
+
 export default function LandingPage() {
   const [mode, setMode] = useState<Mode>('landing');
   const [username, setUsername] = useState('');
@@ -16,6 +29,7 @@ export default function LandingPage() {
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
   const [checkingSession, setCheckingSession] = useState(true);
+
   const router = useRouter();
   const { setUser, clearUser } = useAuthStore();
 
@@ -33,6 +47,18 @@ export default function LandingPage() {
       });
   }, [clearUser, router, setUser]);
 
+  function resetSensitiveFields() {
+    setPassword('');
+    setConfirmPassword('');
+  }
+
+  function switchMode(nextMode: Mode) {
+    setMode(nextMode);
+    setError('');
+    setSuccess('');
+    resetSensitiveFields();
+  }
+
   async function handleRegister(e: React.FormEvent) {
     e.preventDefault();
     setError('');
@@ -47,13 +73,12 @@ export default function LandingPage() {
         method: 'POST',
         body: JSON.stringify({ username, password }),
       });
-      setSuccess(`Account created. Log in as ${username}`);
+      setSuccess('Account created. You can log in now.');
       setMode('login');
-      setPassword('');
-      setConfirmPassword('');
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Registration failed');
     } finally {
+      resetSensitiveFields();
       setLoading(false);
     }
   }
@@ -64,194 +89,373 @@ export default function LandingPage() {
     setSuccess('');
     setLoading(true);
     try {
-      const user = await apiFetch<{ id: string; username: string }>('/api/auth/login', {
+      const user = await apiFetch<LoginResponse>('/api/auth/login', {
         method: 'POST',
         body: JSON.stringify({ username, password }),
       });
-      setUser(user);
+      setUser({
+        id: user.id,
+        username: user.username,
+        weightHandshake: user.weightHandshake,
+      });
       router.push('/cosmic');
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Login failed');
     } finally {
+      resetSensitiveFields();
       setLoading(false);
     }
   }
 
   if (checkingSession) {
     return (
-      <div className="min-h-screen flex items-center justify-center px-4 bg-gray-50 dark:bg-gray-950">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-500" />
+      <div className="auth-root">
+        <div className="auth-orb auth-orb-one" />
+        <div className="auth-orb auth-orb-two" />
+        <div className="spinner" aria-label="Loading" />
+        <style jsx>{`
+          .auth-root {
+            min-height: 100vh;
+            display: grid;
+            place-items: center;
+            position: relative;
+            overflow: hidden;
+            background: radial-gradient(ellipse at 20% 20%, #1a0a2e 0%, #0a0a1a 40%, #050510 100%);
+          }
+          .auth-orb {
+            position: absolute;
+            border-radius: 999px;
+            pointer-events: none;
+          }
+          .auth-orb-one {
+            width: 360px;
+            height: 360px;
+            right: -120px;
+            top: -120px;
+            background: radial-gradient(circle, rgba(139, 92, 246, 0.14) 0%, transparent 70%);
+          }
+          .auth-orb-two {
+            width: 420px;
+            height: 420px;
+            left: -90px;
+            bottom: -160px;
+            background: radial-gradient(circle, rgba(236, 72, 153, 0.1) 0%, transparent 70%);
+          }
+          .spinner {
+            width: 38px;
+            height: 38px;
+            border: 3px solid rgba(255, 255, 255, 0.2);
+            border-top-color: #c084fc;
+            border-radius: 999px;
+            animation: spin 0.8s linear infinite;
+            position: relative;
+            z-index: 2;
+          }
+          @keyframes spin {
+            to {
+              transform: rotate(360deg);
+            }
+          }
+        `}</style>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center px-4 bg-gray-50 dark:bg-gray-950">
-      <div className="w-full max-w-md">
+    <div className="auth-root">
+      <link
+        rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;700&family=DM+Mono:wght@300;400&family=Outfit:wght@300;500;700;900&display=swap"
+      />
+      <div className="auth-orb auth-orb-one" />
+      <div className="auth-orb auth-orb-two" />
+
+      <main className="auth-shell">
+        <header className="brand">
+          <h1>NutriTrack</h1>
+          <p>FUEL YOUR POTENTIAL</p>
+        </header>
+
         {mode === 'landing' && (
-          <div className="text-center mb-8">
-            <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-3">
-              Nutri<span className="text-green-600">Track</span>
-            </h1>
-            <p className="text-gray-500 dark:text-gray-400 mb-8">
-              Private nutrition tracking for your daily goals.
-            </p>
-            <div className="flex flex-col gap-3">
-              <button
-                onClick={() => {
-                  setMode('register');
-                  setError('');
-                  setSuccess('');
-                }}
-                className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 rounded-lg transition-colors"
-              >
-                Get Started
+          <section className="panel">
+            <h2>Mission Control</h2>
+            <p>Track nutrition and body progress with secure account-backed data.</p>
+            <div className="actions">
+              <button type="button" className="primary" onClick={() => switchMode('register')}>
+                Create Account
               </button>
-              <button
-                onClick={() => {
-                  setMode('login');
-                  setError('');
-                  setSuccess('');
-                }}
-                className="w-full bg-white dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 font-semibold py-3 rounded-lg border border-gray-300 dark:border-gray-600 transition-colors"
-              >
-                I have an account
+              <button type="button" className="secondary" onClick={() => switchMode('login')}>
+                Log In
               </button>
             </div>
-            <p className="mt-8 text-xs text-gray-400 dark:text-gray-600">
-              Secure auth with HTTP-only sessions
-            </p>
-          </div>
+            <small>Passwords are hashed with Argon2 and sessions use HTTP-only cookies.</small>
+          </section>
         )}
 
         {mode === 'register' && (
-          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-800 p-8">
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Create account</h2>
-            {error && (
-              <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 rounded-lg text-sm">
-                {error}
-              </div>
-            )}
-            <form onSubmit={handleRegister} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Username
-                </label>
+          <section className="panel">
+            <h2>Create Account</h2>
+            {error && <div className="message error">{error}</div>}
+            {success && <div className="message success">{success}</div>}
+            <form onSubmit={handleRegister}>
+              <label>
+                Username
                 <input
                   type="text"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-green-500"
                   required
                   minLength={3}
                   maxLength={30}
+                  autoComplete="username"
+                  inputMode="text"
                 />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Password
-                </label>
+              </label>
+              <label>
+                Password
                 <input
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-green-500"
                   required
                   minLength={8}
+                  autoComplete="new-password"
                 />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Confirm Password
-                </label>
+              </label>
+              <label>
+                Confirm Password
                 <input
                   type="password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-green-500"
                   required
+                  autoComplete="new-password"
                 />
-              </div>
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white font-semibold py-2.5 rounded-lg transition-colors"
-              >
-                {loading ? 'Creating account...' : 'Create account'}
+              </label>
+              <button type="submit" className="primary wide" disabled={loading}>
+                {loading ? 'Creating...' : 'Create Account'}
               </button>
             </form>
-            <button
-              onClick={() => {
-                setMode('login');
-                setError('');
-                setSuccess('');
-              }}
-              className="mt-4 w-full text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
-            >
+            <button type="button" className="link" onClick={() => switchMode('login')}>
               Already have an account? Log in
             </button>
-          </div>
+          </section>
         )}
 
         {mode === 'login' && (
-          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-800 p-8">
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Welcome back</h2>
-            {success && (
-              <div className="mb-4 p-3 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 rounded-lg text-sm">
-                {success}
-              </div>
-            )}
-            {error && (
-              <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 rounded-lg text-sm">
-                {error}
-              </div>
-            )}
-            <form onSubmit={handleLogin} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Username
-                </label>
+          <section className="panel">
+            <h2>Log In</h2>
+            {error && <div className="message error">{error}</div>}
+            {success && <div className="message success">{success}</div>}
+            <form onSubmit={handleLogin}>
+              <label>
+                Username
                 <input
                   type="text"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-green-500"
                   required
+                  autoComplete="username"
+                  inputMode="text"
                 />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Password
-                </label>
+              </label>
+              <label>
+                Password
                 <input
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-green-500"
                   required
+                  autoComplete="current-password"
                 />
-              </div>
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white font-semibold py-2.5 rounded-lg transition-colors"
-              >
-                {loading ? 'Logging in...' : 'Log in'}
+              </label>
+              <button type="submit" className="primary wide" disabled={loading}>
+                {loading ? 'Authenticating...' : 'Log In + Weight Handshake'}
               </button>
             </form>
-            <button
-              onClick={() => {
-                setMode('register');
-                setError('');
-                setSuccess('');
-              }}
-              className="mt-4 w-full text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
-            >
+            <button type="button" className="link" onClick={() => switchMode('register')}>
               Need an account? Register
             </button>
-          </div>
+          </section>
         )}
-      </div>
+      </main>
+
+      <style jsx>{`
+        .auth-root {
+          min-height: 100vh;
+          display: grid;
+          place-items: center;
+          position: relative;
+          overflow: hidden;
+          background: radial-gradient(ellipse at 20% 20%, #1a0a2e 0%, #0a0a1a 40%, #050510 100%);
+          color: #e8e0f0;
+          font-family: 'DM Sans', sans-serif;
+          padding: 20px;
+        }
+        .auth-orb {
+          position: absolute;
+          border-radius: 999px;
+          pointer-events: none;
+        }
+        .auth-orb-one {
+          width: 360px;
+          height: 360px;
+          right: -120px;
+          top: -120px;
+          background: radial-gradient(circle, rgba(139, 92, 246, 0.14) 0%, transparent 70%);
+        }
+        .auth-orb-two {
+          width: 420px;
+          height: 420px;
+          left: -90px;
+          bottom: -160px;
+          background: radial-gradient(circle, rgba(236, 72, 153, 0.1) 0%, transparent 70%);
+        }
+        .auth-shell {
+          width: min(470px, 100%);
+          z-index: 2;
+        }
+        .brand {
+          margin-bottom: 16px;
+          text-align: center;
+        }
+        .brand h1 {
+          margin: 0;
+          font-family: 'Outfit', sans-serif;
+          font-weight: 900;
+          font-size: clamp(34px, 6vw, 44px);
+          letter-spacing: -0.03em;
+          background: linear-gradient(135deg, #ffffff 0%, #c084fc 50%, #ec4899 100%);
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+        }
+        .brand p {
+          margin: 6px 0 0;
+          font-family: 'DM Mono', monospace;
+          font-size: 12px;
+          color: rgba(255, 255, 255, 0.45);
+          letter-spacing: 0.08em;
+        }
+        .panel {
+          border-radius: 20px;
+          background: rgba(255, 255, 255, 0.03);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          backdrop-filter: blur(20px);
+          -webkit-backdrop-filter: blur(20px);
+          padding: 24px;
+        }
+        .panel h2 {
+          margin: 0 0 8px;
+          font-family: 'Outfit', sans-serif;
+          font-size: 28px;
+          font-weight: 700;
+        }
+        .panel p {
+          margin: 0 0 16px;
+          color: rgba(255, 255, 255, 0.62);
+          font-size: 14px;
+          line-height: 1.5;
+        }
+        .actions {
+          display: grid;
+          gap: 10px;
+        }
+        .panel small {
+          display: block;
+          margin-top: 14px;
+          font-size: 11px;
+          font-family: 'DM Mono', monospace;
+          color: rgba(255, 255, 255, 0.42);
+          line-height: 1.5;
+        }
+        form {
+          display: grid;
+          gap: 12px;
+        }
+        label {
+          display: grid;
+          gap: 6px;
+          font-size: 12px;
+          font-family: 'DM Mono', monospace;
+          letter-spacing: 0.04em;
+          text-transform: uppercase;
+          color: rgba(255, 255, 255, 0.62);
+        }
+        input {
+          border-radius: 12px;
+          border: 1px solid rgba(255, 255, 255, 0.14);
+          background: rgba(255, 255, 255, 0.05);
+          color: #f4edff;
+          padding: 12px 14px;
+          font-size: 15px;
+          outline: none;
+        }
+        input:focus {
+          border-color: rgba(192, 132, 252, 0.6);
+          box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.2);
+        }
+        button {
+          border: none;
+          cursor: pointer;
+          font-family: 'DM Sans', sans-serif;
+        }
+        .primary {
+          border-radius: 12px;
+          padding: 11px 16px;
+          font-size: 14px;
+          font-weight: 600;
+          color: white;
+          background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+          box-shadow: 0 6px 22px rgba(139, 92, 246, 0.35);
+          transition: all 0.2s ease;
+        }
+        .primary:hover {
+          filter: brightness(1.08);
+        }
+        .primary:active {
+          transform: scale(0.98);
+        }
+        .primary:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+        }
+        .secondary {
+          border-radius: 12px;
+          padding: 11px 16px;
+          font-size: 14px;
+          font-weight: 600;
+          color: rgba(255, 255, 255, 0.85);
+          background: rgba(255, 255, 255, 0.06);
+          border: 1px solid rgba(255, 255, 255, 0.12);
+        }
+        .wide {
+          width: 100%;
+          margin-top: 4px;
+        }
+        .link {
+          margin-top: 12px;
+          width: 100%;
+          background: none;
+          color: #c084fc;
+          font-size: 13px;
+        }
+        .message {
+          margin-bottom: 10px;
+          border-radius: 10px;
+          padding: 10px 12px;
+          font-size: 13px;
+        }
+        .message.error {
+          background: rgba(255, 107, 107, 0.14);
+          border: 1px solid rgba(255, 107, 107, 0.35);
+          color: #ffb4b4;
+        }
+        .message.success {
+          background: rgba(52, 211, 153, 0.14);
+          border: 1px solid rgba(52, 211, 153, 0.35);
+          color: #99f6d0;
+        }
+      `}</style>
     </div>
   );
 }

@@ -3,6 +3,14 @@ import { create } from 'zustand';
 interface User {
   id: string;
   username: string;
+  weightHandshake?: {
+    source: 'supabase';
+    status: 'connected' | 'not_configured' | 'not_found' | 'error';
+    latestWeight: number | null;
+    unit: string | null;
+    loggedAt: string | null;
+    message?: string;
+  };
 }
 
 interface AuthStore {
