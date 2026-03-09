@@ -29,22 +29,29 @@ export default function LandingPage() {
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
   const [checkingSession, setCheckingSession] = useState(true);
+  const [redirecting, setRedirecting] = useState(false);
 
   const router = useRouter();
   const { setUser, clearUser } = useAuthStore();
 
   useEffect(() => {
+    let cancelled = false;
     apiFetch<{ id: string; username: string }>('/api/auth/me')
       .then((user) => {
+        if (cancelled) return;
         setUser(user);
+        setRedirecting(true);
         router.replace('/cosmic');
       })
       .catch(() => {
+        if (cancelled) return;
         clearUser();
-      })
-      .finally(() => {
+        setRedirecting(false);
         setCheckingSession(false);
-      });
+      })
+    return () => {
+      cancelled = true;
+    };
   }, [clearUser, router, setUser]);
 
   function resetSensitiveFields() {
@@ -98,7 +105,8 @@ export default function LandingPage() {
         username: user.username,
         weightHandshake: user.weightHandshake,
       });
-      router.push('/cosmic');
+      setRedirecting(true);
+      router.replace('/cosmic');
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Login failed');
     } finally {
@@ -107,7 +115,7 @@ export default function LandingPage() {
     }
   }
 
-  if (checkingSession) {
+  if (checkingSession || redirecting) {
     return (
       <div className="auth-root">
         <div className="auth-orb auth-orb-one" />
