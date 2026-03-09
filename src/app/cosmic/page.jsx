@@ -11,7 +11,10 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { useRouter } from "next/navigation";
 import { AuthGuard } from "@/components/AuthGuard";
+import { useAuthStore } from "@/stores/auth";
+import { apiFetch } from "@/api/client";
 
 const FOOD_DATABASE = [
   { id: 1, name: "Chicken Breast (grilled)", cals: 165, protein: 31, carbs: 0, fat: 3.6, per: "100g", category: "protein", units: ["g", "oz", "serving"], baseServing: 100, baseUnit: "g" },
@@ -433,7 +436,10 @@ function makeId(prefix = "id") {
 }
 
 export default function CosmicNutriTrackPage() {
+  const router = useRouter();
+  const { clearUser } = useAuthStore();
   const [mounted, setMounted] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [activeScreen, setActiveScreen] = useState("dashboard");
   const [appState, setAppState] = useState(INITIAL_STATE);
   const [clock, setClock] = useState("--:--:--");
@@ -658,6 +664,19 @@ export default function CosmicNutriTrackPage() {
     setTimeout(() => {
       setToasts((prev) => prev.filter((item) => item.id !== id));
     }, 4000);
+  };
+
+  const handleLogout = async () => {
+    if (isLoggingOut) return;
+    setIsLoggingOut(true);
+    try {
+      await apiFetch("/api/auth/logout", { method: "POST" });
+    } catch {
+      // Fall through to local logout so users are never stuck in the app UI.
+    } finally {
+      clearUser();
+      router.replace("/");
+    }
   };
 
   const closeSearchOverlay = () => {
@@ -1865,7 +1884,9 @@ export default function CosmicNutriTrackPage() {
         </div>
         <div className="button-row">
           <button type="button" className="ghost-add">Change Password</button>
-          <button type="button" className="danger-outline">Log Out</button>
+          <button type="button" className="danger-outline" onClick={handleLogout} disabled={isLoggingOut}>
+            {isLoggingOut ? "Logging out..." : "Log Out"}
+          </button>
         </div>
         <button type="button" className="setup-link" onClick={() => setShowOnboardingWizard(true)}>Recalculate TDEE</button>
       </article>
@@ -1908,19 +1929,21 @@ export default function CosmicNutriTrackPage() {
       </aside>
 
       <main className="cosmic-main">
-        <header className="top-header">
-          <div>
-            <h1>NutriTrack</h1>
-            <p>FUEL YOUR POTENTIAL</p>
-          </div>
-          <div className="header-center">{renderDateNavigator()}</div>
-          <div className="header-right">
-            <div className="clock-pill">{clock}</div>
-            <button type="button" className="primary-btn" onClick={() => openSearchOverlay(null)}>+ Log Food</button>
-          </div>
-        </header>
+        <div className="cosmic-content">
+          <header className="top-header">
+            <div>
+              <h1>NutriTrack</h1>
+              <p>FUEL YOUR POTENTIAL</p>
+            </div>
+            <div className="header-center">{renderDateNavigator()}</div>
+            <div className="header-right">
+              <div className="clock-pill">{clock}</div>
+              <button type="button" className="primary-btn" onClick={() => openSearchOverlay(null)}>+ Log Food</button>
+            </div>
+          </header>
 
-        {renderScreen()}
+          {renderScreen()}
+        </div>
       </main>
 
       <nav className="bottom-tabs">
@@ -2344,11 +2367,15 @@ export default function CosmicNutriTrackPage() {
         }
         .cosmic-main {
           margin-left: 72px;
-          padding: 24px 32px 32px;
+          padding: clamp(20px, 2.4vw, 32px) clamp(20px, 3vw, 42px) clamp(30px, 4vw, 48px);
           height: 100vh;
           overflow-y: auto;
           position: relative;
           z-index: 2;
+        }
+        .cosmic-content {
+          width: min(1360px, 100%);
+          margin: 0 auto;
         }
         .top-header {
           display: flex;
@@ -2753,6 +2780,7 @@ export default function CosmicNutriTrackPage() {
         .button-row { display: flex; gap: 8px; flex-wrap: wrap; }
         .danger-outline { border: 1px solid rgba(255, 107, 107, 0.7); background: transparent; color: #ff6b6b; border-radius: 10px; padding: 10px 12px; cursor: pointer; }
         .danger-outline:hover { background: rgba(255, 107, 107, 0.1); }
+        .danger-outline:disabled { opacity: 0.6; cursor: not-allowed; }
         .overlay {
           position: fixed;
           inset: 0;
@@ -3000,7 +3028,7 @@ export default function CosmicNutriTrackPage() {
         }
         @media (max-width: 1023px) {
           .cosmic-sidebar { display: none; }
-          .cosmic-main { margin-left: 0; padding: 20px 20px 90px; }
+          .cosmic-main { margin-left: 0; padding: 22px 22px 96px; }
           .bottom-tabs { display: flex; }
           .header-right .primary-btn { display: none; }
           .fab-log { display: grid; }
@@ -3010,7 +3038,7 @@ export default function CosmicNutriTrackPage() {
           .header-center { flex: 1; }
         }
         @media (max-width: 767px) {
-          .cosmic-main { padding: 16px 16px 84px; }
+          .cosmic-main { padding: 18px 18px 88px; }
           .top-header { flex-wrap: wrap; gap: 10px; }
           .header-center { order: 3; width: 100%; justify-content: flex-start; }
           .clock-pill { display: none; }

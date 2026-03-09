@@ -19,9 +19,12 @@ export function Nav() {
   const { user, clearUser } = useAuthStore();
 
   async function handleLogout() {
-    await apiFetch('/api/auth/logout', { method: 'POST' });
-    clearUser();
-    router.push('/');
+    try {
+      await apiFetch('/api/auth/logout', { method: 'POST' });
+    } finally {
+      clearUser();
+      router.replace('/');
+    }
   }
 
   if (pathname?.startsWith('/cosmic')) return null;
