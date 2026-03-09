@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -24,6 +24,7 @@ export function Nav() {
     router.push('/');
   }
 
+  if (pathname?.startsWith('/cosmic')) return null;
   if (!user) return null;
 
   return (
@@ -58,3 +59,4 @@ export function Nav() {
     </nav>
   );
 }
+
