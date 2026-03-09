@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, AuthError } from '@/lib/auth';
-import { db } from '@/lib/db';
 import { hashPassword, verifyPassword } from '@/lib/crypto';
 import { PasswordChangeSchema } from '@/lib/schemas';
+import { supabaseAdmin } from '@/lib/supabase-server';
 
 export const runtime = 'nodejs';
 
@@ -24,12 +24,16 @@ export async function PUT(req: NextRequest) {
 
     const { current_password, new_password } = parsed.data;
 
-    const result = await db.execute({
-      sql: 'SELECT password_hash FROM users WHERE id = ?',
-      args: [session.userId],
-    });
+    const { data: user, error: userError } = await supabaseAdmin
+      .from('users')
+      .select('password_hash')
+      .eq('id', session.userId)
+      .maybeSingle();
 
-    const user = result.rows[0];
+    if (userError) {
+      return NextResponse.json({ error: 'User lookup failed' }, { status: 500 });
+    }
+
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
@@ -40,10 +44,14 @@ export async function PUT(req: NextRequest) {
     }
 
     const newHash = await hashPassword(new_password);
-    await db.execute({
-      sql: 'UPDATE users SET password_hash = ? WHERE id = ?',
-      args: [newHash, session.userId],
-    });
+    const { error: updateError } = await supabaseAdmin
+      .from('users')
+      .update({ password_hash: newHash })
+      .eq('id', session.userId);
+
+    if (updateError) {
+      return NextResponse.json({ error: 'Failed to update password' }, { status: 500 });
+    }
 
     return NextResponse.json({ success: true });
   } catch (e) {

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, AuthError } from '@/lib/auth';
-import { db } from '@/lib/db';
+import { supabaseAdmin } from '@/lib/supabase-server';
 
 export const runtime = 'nodejs';
 
@@ -12,23 +12,28 @@ export async function DELETE(
     const session = await requireAuth(req);
     const { id } = await params;
 
-    const result = await db.execute({
-      sql: 'SELECT user_id FROM custom_foods WHERE id = ?',
-      args: [id],
-    });
+    const { data: food, error: lookupError } = await supabaseAdmin
+      .from('custom_foods')
+      .select('user_id')
+      .eq('id', id)
+      .maybeSingle();
 
-    const food = result.rows[0];
+    if (lookupError) {
+      return NextResponse.json({ error: 'Lookup failed' }, { status: 500 });
+    }
+
     if (!food) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
-    if (food.user_id !== session.userId) {
+    if ((food.user_id as string) !== session.userId) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    await db.execute({
-      sql: 'DELETE FROM custom_foods WHERE id = ?',
-      args: [id],
-    });
+    const { error: deleteError } = await supabaseAdmin.from('custom_foods').delete().eq('id', id);
+
+    if (deleteError) {
+      return NextResponse.json({ error: 'Delete failed' }, { status: 500 });
+    }
 
     return NextResponse.json({ success: true });
   } catch (e) {

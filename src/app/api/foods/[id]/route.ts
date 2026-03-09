@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { supabaseAdmin } from '@/lib/supabase-server';
 
 export const runtime = 'nodejs';
 
@@ -8,15 +8,18 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const result = await db.execute({
-    sql: `SELECT id, name, brand, category, serving_size_g, serving_label,
-                 calories, protein_g, carbs_g, fat_g, fiber_g, sugar_g,
-                 saturated_fat_g, sodium_mg
-          FROM foods WHERE id = ?`,
-    args: [id],
-  });
+  const { data: food, error } = await supabaseAdmin
+    .from('foods')
+    .select(
+      'id, name, brand, category, serving_size_g, serving_label, calories, protein_g, carbs_g, fat_g, fiber_g, sugar_g, saturated_fat_g, sodium_mg'
+    )
+    .eq('id', id)
+    .maybeSingle();
 
-  const food = result.rows[0];
+  if (error) {
+    return NextResponse.json({ error: 'Food lookup failed' }, { status: 500 });
+  }
+
   if (!food) {
     return NextResponse.json({ error: 'Food not found' }, { status: 404 });
   }

@@ -1,14 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
 import { verifyPassword, generateSessionToken, hashToken } from '@/lib/crypto';
 import { LoginSchema } from '@/lib/schemas';
 import { sessionCookieOptions } from '@/lib/auth';
 import { checkLoginRateLimit } from '@/lib/rate-limit';
 import { handshakeWeightTracking } from '@/lib/weight-handshake';
+import { assertSupabaseConfigured, supabaseAdmin } from '@/lib/supabase-server';
 
 export const runtime = 'nodejs';
 
 export async function POST(req: NextRequest) {
+  try {
+    assertSupabaseConfigured();
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Supabase is not configured' },
+      { status: 500 }
+    );
+  }
+
   let body: unknown;
   try {
     body = await req.json();
@@ -34,15 +43,17 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const result = await db.execute({
-    sql: 'SELECT id, username, password_hash FROM users WHERE username = ?',
-    args: [username],
-  });
+  const { data: user, error: userError } = await supabaseAdmin
+    .from('users')
+    .select('id, username, password_hash')
+    .eq('username', username)
+    .maybeSingle();
 
-  const user = result.rows[0];
-  const passwordHash = user?.password_hash as string | undefined;
+  if (userError) {
+    return NextResponse.json({ error: 'User lookup failed' }, { status: 500 });
+  }
 
-  // Always run verify to prevent timing attacks
+  const passwordHash = (user?.password_hash as string | undefined) ?? undefined;
   const dummyHash = '$argon2id$v=19$m=65536,t=3,p=4$placeholder';
   const isValid = user
     ? await verifyPassword(password, passwordHash ?? dummyHash)
@@ -57,10 +68,16 @@ export async function POST(req: NextRequest) {
   const sessionId = crypto.randomUUID();
   const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
 
-  await db.execute({
-    sql: 'INSERT INTO sessions (id, user_id, token_hash, expires_at) VALUES (?, ?, ?, ?)',
-    args: [sessionId, user.id as string, tokenHash, expiresAt],
+  const { error: insertSessionError } = await supabaseAdmin.from('sessions').insert({
+    id: sessionId,
+    user_id: user.id as string,
+    token_hash: tokenHash,
+    expires_at: expiresAt,
   });
+
+  if (insertSessionError) {
+    return NextResponse.json({ error: 'Failed to create session' }, { status: 500 });
+  }
 
   const weightHandshake = await handshakeWeightTracking(user.id as string);
   const opts = sessionCookieOptions();

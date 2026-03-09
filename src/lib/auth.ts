@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
-import { db } from './db';
 import { hashToken } from './crypto';
+import { assertSupabaseConfigured, supabaseAdmin } from './supabase-server';
 
 export interface SessionUser {
   userId: string;
@@ -16,28 +16,55 @@ export class AuthError extends Error {
 }
 
 export async function requireAuth(req: NextRequest): Promise<SessionUser> {
+  try {
+    assertSupabaseConfigured();
+  } catch (error) {
+    throw new AuthError(error instanceof Error ? error.message : 'Supabase is not configured', 500);
+  }
+
   const cookie = req.cookies.get('session');
   if (!cookie?.value) {
     throw new AuthError('Not authenticated');
   }
 
   const tokenHash = hashToken(cookie.value);
-  const result = await db.execute({
-    sql: `SELECT s.user_id, u.username
-          FROM sessions s
-          JOIN users u ON u.id = s.user_id
-          WHERE s.token_hash = ? AND s.expires_at > datetime('now')`,
-    args: [tokenHash],
-  });
 
-  const row = result.rows[0];
-  if (!row) {
+  const { data: sessionRow, error: sessionError } = await supabaseAdmin
+    .from('sessions')
+    .select('user_id, expires_at')
+    .eq('token_hash', tokenHash)
+    .maybeSingle();
+
+  if (sessionError) {
+    throw new AuthError('Session lookup failed', 500);
+  }
+
+  if (!sessionRow) {
+    throw new AuthError('Session expired or invalid');
+  }
+
+  const expiry = new Date(sessionRow.expires_at as string).getTime();
+  if (!Number.isFinite(expiry) || expiry <= Date.now()) {
+    throw new AuthError('Session expired or invalid');
+  }
+
+  const { data: userRow, error: userError } = await supabaseAdmin
+    .from('users')
+    .select('id, username')
+    .eq('id', sessionRow.user_id as string)
+    .maybeSingle();
+
+  if (userError) {
+    throw new AuthError('User lookup failed', 500);
+  }
+
+  if (!userRow) {
     throw new AuthError('Session expired or invalid');
   }
 
   return {
-    userId: row.user_id as string,
-    username: row.username as string,
+    userId: userRow.id as string,
+    username: userRow.username as string,
   };
 }
 

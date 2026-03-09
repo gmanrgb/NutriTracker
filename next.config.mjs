@@ -5,7 +5,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  serverExternalPackages: ['@node-rs/argon2', '@libsql/client'],
+  serverExternalPackages: ['@node-rs/argon2'],
   turbopack: {
     root: __dirname,
   },

@@ -1,17 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, AuthError } from '@/lib/auth';
-import { db } from '@/lib/db';
+import { supabaseAdmin } from '@/lib/supabase-server';
 
 export const runtime = 'nodejs';
 
 export async function GET(req: NextRequest) {
   try {
     const session = await requireAuth(req);
-    const result = await db.execute({
-      sql: 'SELECT id, username, created_at FROM users WHERE id = ?',
-      args: [session.userId],
-    });
-    const user = result.rows[0];
+    const { data: user, error } = await supabaseAdmin
+      .from('users')
+      .select('id, username, created_at')
+      .eq('id', session.userId)
+      .maybeSingle();
+
+    if (error) {
+      return NextResponse.json({ error: 'User lookup failed' }, { status: 500 });
+    }
+
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }

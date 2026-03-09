@@ -1,12 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
 import { hashPassword } from '@/lib/crypto';
 import { RegisterSchema } from '@/lib/schemas';
 import { checkRegisterRateLimit } from '@/lib/rate-limit';
+import { assertSupabaseConfigured, supabaseAdmin } from '@/lib/supabase-server';
 
 export const runtime = 'nodejs';
 
 export async function POST(req: NextRequest) {
+  try {
+    assertSupabaseConfigured();
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Supabase is not configured' },
+      { status: 500 }
+    );
+  }
+
   const ip = req.headers.get('x-forwarded-for') ?? req.headers.get('x-real-ip') ?? 'unknown';
   const rl = await checkRegisterRateLimit(ip);
   if (!rl.success) {
@@ -33,21 +42,35 @@ export async function POST(req: NextRequest) {
 
   const { username, password } = parsed.data;
 
-  const existing = await db.execute({
-    sql: 'SELECT id FROM users WHERE username = ?',
-    args: [username],
-  });
-  if (existing.rows.length > 0) {
+  const { data: existing, error: existingError } = await supabaseAdmin
+    .from('users')
+    .select('id')
+    .eq('username', username)
+    .maybeSingle();
+
+  if (existingError) {
+    return NextResponse.json({ error: 'User lookup failed' }, { status: 500 });
+  }
+
+  if (existing) {
     return NextResponse.json({ error: 'Username already taken' }, { status: 409 });
   }
 
   const passwordHash = await hashPassword(password);
   const id = crypto.randomUUID();
 
-  await db.execute({
-    sql: 'INSERT INTO users (id, username, password_hash) VALUES (?, ?, ?)',
-    args: [id, username, passwordHash],
+  const { error: insertError } = await supabaseAdmin.from('users').insert({
+    id,
+    username,
+    password_hash: passwordHash,
   });
+
+  if (insertError) {
+    if (insertError.code === '23505') {
+      return NextResponse.json({ error: 'Username already taken' }, { status: 409 });
+    }
+    return NextResponse.json({ error: 'Failed to create user' }, { status: 500 });
+  }
 
   return NextResponse.json({ success: true, username }, { status: 201 });
 }

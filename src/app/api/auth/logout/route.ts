@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
 import { hashToken } from '@/lib/crypto';
+import { supabaseAdmin } from '@/lib/supabase-server';
 
 export const runtime = 'nodejs';
 
@@ -8,10 +8,7 @@ export async function POST(req: NextRequest) {
   const cookie = req.cookies.get('session');
   if (cookie?.value) {
     const tokenHash = hashToken(cookie.value);
-    await db.execute({
-      sql: 'DELETE FROM sessions WHERE token_hash = ?',
-      args: [tokenHash],
-    });
+    await supabaseAdmin.from('sessions').delete().eq('token_hash', tokenHash);
   }
 
   const response = NextResponse.json({ success: true });
