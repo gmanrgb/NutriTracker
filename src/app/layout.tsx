@@ -5,10 +5,10 @@ import { Nav } from '@/components/Nav';
 import { Toaster } from '@/components/Toaster';
 import './globals.css';
 
-const inter = Inter({ subsets: ['latin'] });
+const inter = Inter({ subsets: ['latin'], display: 'swap', preload: false });
 
 export const metadata: Metadata = {
-  title: 'NutriTrack — Nutrition Tracker',
+  title: 'NutriTrack - Nutrition Tracker',
   description: 'Self-hosted nutrition tracking app',
 };
 

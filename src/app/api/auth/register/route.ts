@@ -2,7 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { hashPassword } from '@/lib/crypto';
 import { RegisterSchema } from '@/lib/schemas';
 import { checkRegisterRateLimit } from '@/lib/rate-limit';
-import { assertSupabaseConfigured, supabaseAdmin } from '@/lib/supabase-server';
+import {
+  assertSupabaseConfigured,
+  explainSupabaseError,
+  supabaseAdmin,
+} from '@/lib/supabase-server';
 
 export const runtime = 'nodejs';
 
@@ -42,20 +46,6 @@ export async function POST(req: NextRequest) {
 
   const { username, password } = parsed.data;
 
-  const { data: existing, error: existingError } = await supabaseAdmin
-    .from('users')
-    .select('id')
-    .eq('username', username)
-    .maybeSingle();
-
-  if (existingError) {
-    return NextResponse.json({ error: 'User lookup failed' }, { status: 500 });
-  }
-
-  if (existing) {
-    return NextResponse.json({ error: 'Username already taken' }, { status: 409 });
-  }
-
   const passwordHash = await hashPassword(password);
   const id = crypto.randomUUID();
 
@@ -69,7 +59,10 @@ export async function POST(req: NextRequest) {
     if (insertError.code === '23505') {
       return NextResponse.json({ error: 'Username already taken' }, { status: 409 });
     }
-    return NextResponse.json({ error: 'Failed to create user' }, { status: 500 });
+    return NextResponse.json(
+      { error: explainSupabaseError(insertError, 'Failed to create user') },
+      { status: 500 }
+    );
   }
 
   return NextResponse.json({ success: true, username }, { status: 201 });

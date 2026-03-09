@@ -4,7 +4,11 @@ import { LoginSchema } from '@/lib/schemas';
 import { sessionCookieOptions } from '@/lib/auth';
 import { checkLoginRateLimit } from '@/lib/rate-limit';
 import { handshakeWeightTracking } from '@/lib/weight-handshake';
-import { assertSupabaseConfigured, supabaseAdmin } from '@/lib/supabase-server';
+import {
+  assertSupabaseConfigured,
+  explainSupabaseError,
+  supabaseAdmin,
+} from '@/lib/supabase-server';
 
 export const runtime = 'nodejs';
 
@@ -50,7 +54,10 @@ export async function POST(req: NextRequest) {
     .maybeSingle();
 
   if (userError) {
-    return NextResponse.json({ error: 'User lookup failed' }, { status: 500 });
+    return NextResponse.json(
+      { error: explainSupabaseError(userError, 'User lookup failed') },
+      { status: 500 }
+    );
   }
 
   const passwordHash = (user?.password_hash as string | undefined) ?? undefined;

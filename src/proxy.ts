@@ -2,10 +2,19 @@ import { NextResponse } from 'next/server';
 
 export function proxy() {
   const response = NextResponse.next();
+  const csp = [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline' https://vercel.live https://*.vercel.live",
+    "script-src-elem 'self' 'unsafe-inline' https://vercel.live https://*.vercel.live",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "img-src 'self' data: https:",
+    "font-src 'self' https://fonts.gstatic.com data:",
+    "connect-src 'self' https://vercel.live https://*.vercel.live",
+  ].join('; ');
 
   response.headers.set(
     'Content-Security-Policy',
-    "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data:; font-src 'self' https://fonts.gstatic.com data:"
+    csp
   );
   response.headers.set('X-Content-Type-Options', 'nosniff');
   response.headers.set('X-Frame-Options', 'DENY');
