@@ -11,6 +11,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { AuthGuard } from "@/components/AuthGuard";
 
 const FOOD_DATABASE = [
   { id: 1, name: "Chicken Breast (grilled)", cals: 165, protein: 31, carbs: 0, fat: 3.6, per: "100g", category: "protein", units: ["g", "oz", "serving"], baseServing: 100, baseUnit: "g" },
@@ -1882,7 +1883,8 @@ export default function CosmicNutriTrackPage() {
   };
 
   return (
-    <div className={`cosmic-root ${appState.settings.theme === "solar" ? "solar" : ""}`}>
+    <AuthGuard>
+      <div className={`cosmic-root ${appState.settings.theme === "solar" ? "solar" : ""}`}>
       <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;700&family=DM+Mono:wght@300;400&family=Outfit:wght@200;300;400;600;800;900&display=swap" />
       <canvas ref={canvasRef} className="star-canvas" />
       <div className="orb orb-one" />
@@ -3033,6 +3035,7 @@ export default function CosmicNutriTrackPage() {
         }
         @keyframes slideUp { from { transform: translateY(40px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
       `}</style>
-    </div>
+      </div>
+    </AuthGuard>
   );
 }
