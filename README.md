@@ -1,4 +1,4 @@
-# NutriTrack
+# NutriTrack - VibeCoded
 
 NutriTrack is a Next.js nutrition tracker with:
 
