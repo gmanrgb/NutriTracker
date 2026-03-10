@@ -2479,6 +2479,13 @@ export default function CosmicNutriTrackPage() {
       </div>
 
       <style jsx global>{`
+        * { box-sizing: border-box; }
+        *::before,
+        *::after { box-sizing: border-box; }
+        html, body {
+          width: 100%;
+          overflow-x: hidden;
+        }
         :root {
           --bg-void: #050510;
           --bg-nebula: #1a0a2e;
@@ -2491,8 +2498,10 @@ export default function CosmicNutriTrackPage() {
         }
         .cosmic-root {
           position: relative;
+          width: 100%;
+          max-width: 100vw;
           min-height: 100vh;
-          overflow: hidden;
+          overflow-x: hidden;
           color: var(--text-primary);
           font-family: "DM Sans", sans-serif;
           background: radial-gradient(ellipse at 20% 20%, var(--bg-nebula) 0%, var(--bg-space) 40%, var(--bg-void) 100%);
@@ -2594,14 +2603,14 @@ export default function CosmicNutriTrackPage() {
         }
         .cosmic-main {
           margin-left: 72px;
-          padding: clamp(20px, 2.4vw, 32px) clamp(20px, 3vw, 42px) clamp(30px, 4vw, 48px);
+          padding: clamp(22px, 2.6vw, 36px) clamp(24px, 4vw, 64px) clamp(30px, 4vw, 48px);
           height: 100vh;
           overflow-y: auto;
           position: relative;
           z-index: 2;
         }
         .cosmic-content {
-          width: min(1360px, 100%);
+          width: min(1240px, 100%);
           margin: 0 auto;
         }
         .top-header {
@@ -3265,7 +3274,7 @@ export default function CosmicNutriTrackPage() {
           .header-center { flex: 1; }
         }
         @media (max-width: 767px) {
-          .cosmic-main { padding: 18px 18px 88px; }
+          .cosmic-main { padding: 16px 16px 88px; }
           .top-header { flex-wrap: wrap; gap: 10px; }
           .header-center { order: 3; width: 100%; justify-content: flex-start; }
           .clock-pill { display: none; }
