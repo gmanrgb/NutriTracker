@@ -148,6 +148,133 @@ const INITIAL_STATE = {
   autoBalanceMacros: true,
 };
 
+const SETTINGS_STORAGE_KEYS = {
+  theme: "dashboard.theme",
+  units: "dashboard.units",
+  waterGoal: "dashboard.waterGoal",
+  mealNames: "dashboard.mealNames",
+  displayName: "dashboard.displayName",
+  notificationsEnabled: "dashboard.notificationsEnabled",
+  notificationTime: "dashboard.notificationTime",
+  mealWindows: "dashboard.mealWindows",
+};
+
+const SETTINGS_THEME_VALUES = new Set(["cosmic", "solar"]);
+const SETTINGS_UNIT_VALUES = new Set(["imperial", "metric"]);
+const TIME_VALUE_REGEX = /^([01]\d|2[0-3]):([0-5]\d)$/;
+
+function parseJsonObject(rawValue) {
+  if (typeof rawValue !== "string") return null;
+  try {
+    const parsed = JSON.parse(rawValue);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function normalizeSettings(settings, fallback = INITIAL_STATE.settings) {
+  const source = settings && typeof settings === "object" ? settings : {};
+  const mealNamesSource = source.mealNames && typeof source.mealNames === "object" ? source.mealNames : {};
+  const mealWindowsSource = source.mealWindows && typeof source.mealWindows === "object" ? source.mealWindows : {};
+
+  const mealNames = {};
+  const mealWindows = {};
+
+  MEAL_META.forEach((meal) => {
+    const fallbackMealName = fallback.mealNames?.[meal.id] ?? meal.fallbackName;
+    const rawMealName = mealNamesSource[meal.id];
+    const normalizedMealName =
+      typeof rawMealName === "string" && rawMealName.trim()
+        ? rawMealName.trim().slice(0, 32)
+        : fallbackMealName;
+    mealNames[meal.id] = normalizedMealName;
+
+    const fallbackWindow = fallback.mealWindows?.[meal.id] ?? { start: "08:00", end: "20:00" };
+    const sourceWindow = mealWindowsSource[meal.id];
+    const rawStart =
+      sourceWindow && typeof sourceWindow === "object" ? sourceWindow.start : null;
+    const rawEnd =
+      sourceWindow && typeof sourceWindow === "object" ? sourceWindow.end : null;
+    mealWindows[meal.id] = {
+      start: typeof rawStart === "string" && TIME_VALUE_REGEX.test(rawStart) ? rawStart : fallbackWindow.start,
+      end: typeof rawEnd === "string" && TIME_VALUE_REGEX.test(rawEnd) ? rawEnd : fallbackWindow.end,
+    };
+  });
+
+  const rawTheme = source.theme;
+  const rawUnits = source.units;
+  const rawWaterGoal = Number(source.waterGoal);
+  const rawDisplayName = typeof source.displayName === "string" ? source.displayName.trim() : "";
+  const rawNotificationTime = source.notificationTime;
+
+  return {
+    ...fallback,
+    theme: SETTINGS_THEME_VALUES.has(rawTheme) ? rawTheme : fallback.theme,
+    units: SETTINGS_UNIT_VALUES.has(rawUnits) ? rawUnits : fallback.units,
+    waterGoal: Number.isFinite(rawWaterGoal) ? clamp(Math.round(rawWaterGoal), 1, 20) : fallback.waterGoal,
+    mealNames,
+    displayName: rawDisplayName ? rawDisplayName.slice(0, 40) : fallback.displayName,
+    notificationsEnabled:
+      typeof source.notificationsEnabled === "boolean"
+        ? source.notificationsEnabled
+        : fallback.notificationsEnabled,
+    notificationTime:
+      typeof rawNotificationTime === "string" && TIME_VALUE_REGEX.test(rawNotificationTime)
+        ? rawNotificationTime
+        : fallback.notificationTime,
+    mealWindows,
+    email: fallback.email,
+  };
+}
+
+function serializeSettings(settings) {
+  const normalized = normalizeSettings(settings);
+  return {
+    [SETTINGS_STORAGE_KEYS.theme]: normalized.theme,
+    [SETTINGS_STORAGE_KEYS.units]: normalized.units,
+    [SETTINGS_STORAGE_KEYS.waterGoal]: String(normalized.waterGoal),
+    [SETTINGS_STORAGE_KEYS.mealNames]: JSON.stringify(normalized.mealNames),
+    [SETTINGS_STORAGE_KEYS.displayName]: normalized.displayName,
+    [SETTINGS_STORAGE_KEYS.notificationsEnabled]: normalized.notificationsEnabled ? "true" : "false",
+    [SETTINGS_STORAGE_KEYS.notificationTime]: normalized.notificationTime,
+    [SETTINGS_STORAGE_KEYS.mealWindows]: JSON.stringify(normalized.mealWindows),
+  };
+}
+
+function settingsFromStorage(rawSettings, fallbackSettings) {
+  const base = { ...fallbackSettings };
+  const next = { ...base };
+
+  if (typeof rawSettings?.[SETTINGS_STORAGE_KEYS.theme] === "string") {
+    next.theme = rawSettings[SETTINGS_STORAGE_KEYS.theme];
+  }
+  if (typeof rawSettings?.[SETTINGS_STORAGE_KEYS.units] === "string") {
+    next.units = rawSettings[SETTINGS_STORAGE_KEYS.units];
+  }
+  if (typeof rawSettings?.[SETTINGS_STORAGE_KEYS.waterGoal] === "string") {
+    next.waterGoal = Number(rawSettings[SETTINGS_STORAGE_KEYS.waterGoal]);
+  }
+  if (typeof rawSettings?.[SETTINGS_STORAGE_KEYS.displayName] === "string") {
+    next.displayName = rawSettings[SETTINGS_STORAGE_KEYS.displayName];
+  }
+  if (typeof rawSettings?.[SETTINGS_STORAGE_KEYS.notificationsEnabled] === "string") {
+    next.notificationsEnabled = rawSettings[SETTINGS_STORAGE_KEYS.notificationsEnabled] === "true";
+  }
+  if (typeof rawSettings?.[SETTINGS_STORAGE_KEYS.notificationTime] === "string") {
+    next.notificationTime = rawSettings[SETTINGS_STORAGE_KEYS.notificationTime];
+  }
+
+  const parsedMealNames = parseJsonObject(rawSettings?.[SETTINGS_STORAGE_KEYS.mealNames]);
+  if (parsedMealNames) next.mealNames = parsedMealNames;
+
+  const parsedMealWindows = parseJsonObject(rawSettings?.[SETTINGS_STORAGE_KEYS.mealWindows]);
+  if (parsedMealWindows) next.mealWindows = parsedMealWindows;
+
+  return normalizeSettings(next, fallbackSettings);
+}
+
 function dateToKey(date) {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, "0");
@@ -437,11 +564,12 @@ function makeId(prefix = "id") {
 
 export default function CosmicNutriTrackPage() {
   const router = useRouter();
-  const { clearUser } = useAuthStore();
+  const { user, clearUser } = useAuthStore();
   const [mounted, setMounted] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [activeScreen, setActiveScreen] = useState("dashboard");
   const [appState, setAppState] = useState(INITIAL_STATE);
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [clock, setClock] = useState("--:--:--");
   const [todayKey, setTodayKey] = useState("");
   const [searchOverlayOpen, setSearchOverlayOpen] = useState(false);
@@ -496,6 +624,8 @@ export default function CosmicNutriTrackPage() {
   const canvasRef = useRef(null);
   const rafRef = useRef(0);
   const lastMidnightCheckRef = useRef("");
+  const settingsSaveTimerRef = useRef(null);
+  const syncedSettingsRef = useRef(null);
 
   useEffect(() => {
     setMounted(true);
@@ -558,6 +688,103 @@ export default function CosmicNutriTrackPage() {
     });
     setBodyLogDraft((prev) => ({ ...prev, date: appState.selectedDate }));
   }, [appState.selectedDate]);
+
+  useEffect(() => {
+    if (!user?.id) {
+      setSettingsLoaded(false);
+      syncedSettingsRef.current = null;
+      if (settingsSaveTimerRef.current) {
+        clearTimeout(settingsSaveTimerRef.current);
+        settingsSaveTimerRef.current = null;
+      }
+      return;
+    }
+
+    let cancelled = false;
+    setSettingsLoaded(false);
+
+    (async () => {
+      let remoteSettings = {};
+      try {
+        remoteSettings = await apiFetch("/api/settings");
+      } catch {
+        remoteSettings = {};
+      }
+
+      if (cancelled) return;
+
+      setAppState((prev) => {
+        const mergedSettings = settingsFromStorage(remoteSettings, prev.settings);
+        syncedSettingsRef.current = serializeSettings(mergedSettings);
+        return {
+          ...prev,
+          settings: mergedSettings,
+        };
+      });
+
+      setSettingsLoaded(true);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!user?.id || !settingsLoaded) return undefined;
+
+    const serializedSettings = serializeSettings(appState.settings);
+    const previousSynced = syncedSettingsRef.current;
+
+    if (!previousSynced) {
+      syncedSettingsRef.current = serializedSettings;
+      return undefined;
+    }
+
+    const changes = Object.entries(serializedSettings).filter(
+      ([key, value]) => previousSynced[key] !== value,
+    );
+    if (!changes.length) return undefined;
+
+    if (settingsSaveTimerRef.current) {
+      clearTimeout(settingsSaveTimerRef.current);
+      settingsSaveTimerRef.current = null;
+    }
+
+    settingsSaveTimerRef.current = setTimeout(async () => {
+      const saveResults = await Promise.allSettled(
+        changes.map(([key, value]) =>
+          apiFetch("/api/settings", {
+            method: "PUT",
+            body: JSON.stringify({ key, value }),
+          }),
+        ),
+      );
+
+      if (saveResults.every((result) => result.status === "fulfilled")) {
+        syncedSettingsRef.current = serializedSettings;
+      }
+
+      settingsSaveTimerRef.current = null;
+    }, 500);
+
+    return () => {
+      if (settingsSaveTimerRef.current) {
+        clearTimeout(settingsSaveTimerRef.current);
+        settingsSaveTimerRef.current = null;
+      }
+    };
+  }, [appState.settings, settingsLoaded, user?.id]);
+
+  useEffect(
+    () => () => {
+      if (settingsSaveTimerRef.current) {
+        clearTimeout(settingsSaveTimerRef.current);
+        settingsSaveTimerRef.current = null;
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     if (!mounted) return;
@@ -2213,7 +2440,7 @@ export default function CosmicNutriTrackPage() {
                   setAppState((prev) => ({
                     ...INITIAL_STATE,
                     selectedDate: prev.selectedDate,
-                    settings: { ...INITIAL_STATE.settings, mealNames: prev.settings.mealNames },
+                    settings: prev.settings,
                     diaryByDate: { [prev.selectedDate]: createEmptyDay() },
                   }));
                   setShowClearDataConfirm(false);

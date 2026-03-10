@@ -5,13 +5,28 @@ import { supabaseAdmin } from '@/lib/supabase-server';
 
 export const runtime = 'nodejs';
 
+const ALLOWED_SETTING_KEYS = [
+  'dashboard.theme',
+  'dashboard.units',
+  'dashboard.waterGoal',
+  'dashboard.mealNames',
+  'dashboard.displayName',
+  'dashboard.notificationsEnabled',
+  'dashboard.notificationTime',
+  'dashboard.mealWindows',
+] as const;
+
+const ALLOWED_SETTING_KEY_SET = new Set<string>(ALLOWED_SETTING_KEYS);
+const ALLOWED_SETTING_KEY_LIST = Array.from(ALLOWED_SETTING_KEY_SET);
+
 export async function GET(req: NextRequest) {
   try {
     const session = await requireAuth(req);
     const { data, error } = await supabaseAdmin
       .from('user_settings')
       .select('key, value')
-      .eq('user_id', session.userId);
+      .eq('user_id', session.userId)
+      .in('key', ALLOWED_SETTING_KEY_LIST);
 
     if (error) {
       return NextResponse.json({ error: 'Failed to load settings' }, { status: 500 });
@@ -45,6 +60,9 @@ export async function PUT(req: NextRequest) {
     }
 
     const { key, value } = parsed.data;
+    if (!ALLOWED_SETTING_KEY_SET.has(key)) {
+      return NextResponse.json({ error: 'Unsupported setting key' }, { status: 400 });
+    }
 
     const { error } = await supabaseAdmin.from('user_settings').upsert(
       {

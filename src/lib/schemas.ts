@@ -46,7 +46,7 @@ export const CustomFoodSchema = z.object({
 
 export const SettingSchema = z.object({
   key: z.string().min(1).max(50),
-  value: z.string().max(200),
+  value: z.string().max(1000),
 });
 
 export const PasswordChangeSchema = z.object({
